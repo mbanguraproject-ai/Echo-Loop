@@ -1,0 +1,105 @@
+# Builds the Android app on every push and pull request.
+# - Always: a debug APK you can install for testing (Actions run page → Artifacts).
+# - When the signing secrets below are set: a signed release AAB (upload this to Play) and APK.
+# - On a version tag (git tag v2.0.1 && git push --tags): a GitHub Release with the files attached.
+#
+# Repository secrets for release signing (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64   base64 of your upload keystore (base64 -w0 echo-loop-upload.jks)
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+name: Android build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-36 build-tools;36.0.0 platform-tools
+
+      - name: Install dependencies and build web assets
+        run: |
+          npm ci
+          npm run sync
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare release signing
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/upload.jks" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Build signed release AAB and APK
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: android
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+
+      - name: Collect build outputs
+        run: |
+          version=$(grep -oP 'versionName "\K[^"]+' android/app/build.gradle)
+          out=android/app/build/outputs
+          mkdir -p dist
+          cp "$out/apk/debug/app-debug.apk" "dist/EchoLoop-$version-debug.apk"
+          if [ -f "$out/bundle/release/app-release.aab" ]; then
+            cp "$out/bundle/release/app-release.aab" "dist/EchoLoop-$version-release.aab"
+            cp "$out/apk/release/app-release.apk" "dist/EchoLoop-$version-release.apk"
+          fi
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echo-loop-build-${{ github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+      - name: Remove signing files
+        if: always()
+        run: rm -f android/keystore.properties "$RUNNER_TEMP/upload.jks"

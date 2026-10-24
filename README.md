@@ -17,30 +17,65 @@ Web prototype (same code): https://claude.ai/artifact/7zpBThoSuwUrs442UJfTWn
 | `game/echo-loop.html` | The whole game in one file. This is the source of truth. |
 | `src/native.js` | Android bridge: AdMob rewarded + interstitial ads, Google Play Billing, haptics, back button. |
 | `scripts/build-www.mjs` | Builds `www/` for the app: bundles fonts (works offline) and `native.js`. |
+| `scripts/setup-android-sdk.sh` | Installs the Android SDK parts the build needs (Linux). |
+| `.github/workflows/android.yml` | GitHub Actions: debug APK on every push, signed AAB/APK when secrets are set. |
 | `android/` | Capacitor 8 Android project (Gradle, compileSdk/targetSdk 36). |
 | `store/` | Play listing assets: 512px icon, 1024×500 feature graphic, 8 phone screenshots, listing text. |
 | `PRIVACY.md` | Privacy policy template. Fill it in and host it before you publish. |
 
 ## Build
 
-You need Node 22+, JDK 21 and the Android SDK (easiest: install Android Studio).
+### On GitHub (no setup needed)
+
+Every push and pull request runs `.github/workflows/android.yml`. Open the run under the
+**Actions** tab and download the APK from **Artifacts**.
+
+- **Debug APK:** built every time. Install it on a phone to test.
+- **Signed release AAB and APK:** built when the four signing secrets are set (Settings →
+  Secrets and variables → Actions):
+  - `ANDROID_KEYSTORE_BASE64`: run `base64 -w0 echo-loop-upload.jks` and paste the output
+  - `ANDROID_KEYSTORE_PASSWORD`
+  - `ANDROID_KEY_ALIAS`
+  - `ANDROID_KEY_PASSWORD`
+
+  Upload the AAB to Play Console.
+- **GitHub Release:** push a version tag (`git tag v2.0.1 && git push origin v2.0.1`) and the build is
+  attached to a release.
+
+### On your machine
+
+You need Node 22+, JDK 21 and the Android SDK. On Linux, one command installs the SDK parts and
+npm packages (re-running it is safe):
 
 ```bash
-npm install
-npm run sync      # builds www/ and copies it into android/
+npm run setup     # Android SDK (platform 36, build-tools 36) + npm ci + android/local.properties
 npm run apk       # debug APK -> android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or run `npm run sync`, then open `android/` in Android Studio and press Run.
+On macOS or Windows, install Android Studio instead, then run `npm install` and `npm run apk`, or
+run `npm run sync` and open `android/` in Android Studio.
 
-To test the game in a desktop browser: `npm run build && npm run serve`, then open http://localhost:8080.
+On hosts that Maven Central rate-limits (some cloud sandboxes), run
+`bash scripts/setup-android-sdk.sh --maven-mirror` to route downloads through Google's mirror.
+
+| Command | What it does |
+| --- | --- |
+| `npm run setup` | One-time machine setup (Linux). |
+| `npm run build` | Builds `www/` from `game/echo-loop.html` (bundles fonts and `native.js`). |
+| `npm run sync` | `build`, then copies `www/` into the Android project. |
+| `npm run apk` | Debug APK for testing. |
+| `npm run apk:release` | Signed release APK (needs `android/keystore.properties`). |
+| `npm run bundle` | Signed release AAB for Play (needs `android/keystore.properties`). |
+| `npm run serve` | Serves `www/` at http://localhost:8080 to play in a browser. |
+
 In a browser, ads and purchases are simulated with on-screen placeholders.
 
 ## Before you publish: checklist
 
-1. **Pick your package name.** `io.echoloop.game` is a placeholder and can never change once
-   published. Set your own in `capacitor.config.json` (`appId`) and in
-   `android/app/build.gradle` (`applicationId`).
+1. **Package name.** The app ID is `game.devbangs.echoloop`. It can never change once
+   published. It is set in `capacitor.config.json` (`appId`), `android/app/build.gradle`
+   (`namespace`, `applicationId`), `android/app/src/main/res/values/strings.xml` and the
+   `MainActivity.java` package.
 2. **AdMob.** Create the app and two ad units (Rewarded, Interstitial) at admob.google.com.
    - App ID goes in `android/app/src/main/res/values/strings.xml` (`admob_app_id`).
    - Unit IDs go in `src/native.js` (`AD_UNITS`); set `TESTING = false`.
