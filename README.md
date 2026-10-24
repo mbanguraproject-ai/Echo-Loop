@@ -17,7 +17,8 @@ Web prototype (same code): https://claude.ai/artifact/7zpBThoSuwUrs442UJfTWn
 | `game/echo-loop.html` | The whole game in one file. This is the source of truth. |
 | `src/native.js` | Android bridge: AdMob rewarded + interstitial ads, Google Play Billing, haptics, back button. |
 | `scripts/build-www.mjs` | Builds `www/` for the app: bundles fonts (works offline) and `native.js`. |
-| `scripts/setup-android-sdk.sh` | Installs the Android SDK parts the build needs (Linux). |
+| `scripts/setup-android-sdk.sh` | Installs what the build needs on Linux: JDK 21 if missing, Android SDK, npm packages. |
+| `.devcontainer/` | GitHub Codespaces setup: Node 22, JDK 21, Android SDK installed on first start. |
 | `.github/workflows/android.yml` | GitHub Actions: debug APK on every push, signed AAB/APK when secrets are set. |
 | `android/` | Capacitor 8 Android project (Gradle, compileSdk/targetSdk 36). |
 | `store/` | Play listing assets: 512px icon, 1024×500 feature graphic, 8 phone screenshots, listing text. |
@@ -42,14 +43,26 @@ Every push and pull request runs `.github/workflows/android.yml`. Open the run u
 - **GitHub Release:** push a version tag (`git tag v2.0.1 && git push origin v2.0.1`) and the build is
   attached to a release.
 
-### On your machine
+### In GitHub Codespaces
 
-You need Node 22+, JDK 21 and the Android SDK. On Linux, one command installs the SDK parts and
-npm packages (re-running it is safe):
+Open the repo in a codespace (Code → Codespaces → Create). `.devcontainer/` gives it Node 22 and
+JDK 21 and installs the Android SDK on first start. Then, in the terminal:
 
 ```bash
-npm run setup     # Android SDK (platform 36, build-tools 36) + npm ci + android/local.properties
-npm run apk       # debug APK -> android/app/build/outputs/apk/debug/app-debug.apk
+npm run apk       # builds EchoLoop-debug.apk in the project folder
+```
+
+In the Explorer, long-press or right-click `EchoLoop-debug.apk` and choose **Download**.
+For a codespace created before `.devcontainer/` existed, run `npm run setup` once first.
+
+### On your machine
+
+You need Node 22+ and the Android SDK. On Linux, one command installs everything (re-running it is
+safe). If your Java is older than 21, it also installs JDK 21 into `~/jdk-21` for Gradle:
+
+```bash
+npm run setup     # JDK 21 if needed + Android SDK (platform 36, build-tools 36) + npm ci
+npm run apk       # debug APK -> EchoLoop-debug.apk
 ```
 
 On macOS or Windows, install Android Studio instead, then run `npm install` and `npm run apk`, or
@@ -60,13 +73,13 @@ On hosts that Maven Central rate-limits (some cloud sandboxes), run
 
 | Command | What it does |
 | --- | --- |
-| `npm run setup` | One-time machine setup (Linux). |
+| `npm run setup` | One-time machine setup (Linux, Codespaces). |
 | `npm run build` | Builds `www/` from `game/echo-loop.html` (bundles fonts and `native.js`). |
 | `npm run sync` | `build`, then copies `www/` into the Android project. |
-| `npm run apk` | Debug APK for testing. |
-| `npm run apk:release` | Signed release APK (needs `android/keystore.properties`). |
-| `npm run bundle` | Signed release AAB for Play (needs `android/keystore.properties`). |
-| `npm run serve` | Serves `www/` at http://localhost:8080 to play in a browser. |
+| `npm run apk` | Debug APK for testing → `EchoLoop-debug.apk`. |
+| `npm run apk:release` | Signed release APK → `EchoLoop-release.apk` (needs `android/keystore.properties`). |
+| `npm run bundle` | Signed release AAB for Play → `EchoLoop-release.aab` (needs `android/keystore.properties`). |
+| `npm run serve` | Plays the game in a browser at http://localhost:8080. It keeps running until you press Ctrl+C, so run it last or in a second terminal. |
 
 In a browser, ads and purchases are simulated with on-screen placeholders.
 
