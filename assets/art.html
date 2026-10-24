@@ -1,0 +1,103 @@
+<!doctype html><meta charset="utf-8">
+<style>
+@font-face{font-family:"Tektur";font-weight:900;src:url(../www/fonts/tektur-latin-900-normal.woff2) format("woff2")}
+@font-face{font-family:"Chakra Petch";font-weight:600;src:url(../www/fonts/chakra-petch-latin-600-normal.woff2) format("woff2")}
+body{margin:0;background:#000}
+</style>
+<canvas id="c"></canvas>
+<script>
+const CORE=[94,242,255], ECHO=[255,79,216], GOLD=[255,216,74];
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function glow(g,x,y,r,c,a){const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,rgba(c,a));gr.addColorStop(.25,rgba(c,a*.5));gr.addColorStop(.6,rgba(c,a*.12));gr.addColorStop(1,rgba(c,0));g.fillStyle=gr;g.fillRect(x-r,y-r,2*r,2*r);}
+function bg(g,w,h){g.fillStyle='#07050f';g.fillRect(0,0,w,h);const gr=g.createRadialGradient(w*.5,h*.3,0,w*.5,h*.3,Math.max(w,h)*.8);gr.addColorStop(0,'rgba(92,60,210,0.35)');gr.addColorStop(.55,'rgba(40,20,90,0.12)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);}
+function grid(g,w,h,step,a){g.strokeStyle=`rgba(150,140,255,${a})`;g.lineWidth=Math.max(1,step/30);g.beginPath();for(let x=step/2;x<w;x+=step){g.moveTo(x,0);g.lineTo(x,h);}for(let y=step/2;y<h;y+=step){g.moveTo(0,y);g.lineTo(w,y);}g.stroke();}
+// the motif: an orb trailed by two echo rings along a curve. (cx,cy) centre, s = scale (orb radius)
+function motif(g,cx,cy,s){
+  const pts=[[cx+s*1.55,cy-s*1.35],[cx-s*0.15,cy+s*0.15],[cx-s*1.75,cy+s*1.55]];
+  g.lineCap='round';g.strokeStyle=rgba(ECHO,.28);g.lineWidth=s*.16;g.beginPath();
+  g.moveTo(pts[2][0],pts[2][1]);g.quadraticCurveTo(cx-s*1.6,cy-s*.35,pts[1][0],pts[1][1]);g.quadraticCurveTo(cx+s*1.4,cy+s*.5,pts[0][0],pts[0][1]);g.stroke();
+  [[pts[2],.45],[pts[1],.85]].forEach(([p,a])=>{g.globalCompositeOperation='lighter';glow(g,p[0],p[1],s*2.2,ECHO,.5*a);g.globalCompositeOperation='source-over';
+    g.fillStyle='#0c0920';g.beginPath();g.arc(p[0],p[1],s*.95,0,7);g.fill();g.strokeStyle=rgba(ECHO,a);g.lineWidth=s*.26;g.beginPath();g.arc(p[0],p[1],s*.82,0,7);g.stroke();
+    g.fillStyle=rgba(ECHO,a);g.beginPath();g.arc(p[0],p[1],s*.28,0,7);g.fill();});
+  const [px,py]=pts[0];g.globalCompositeOperation='lighter';glow(g,px,py,s*3.6,CORE,.95);g.globalCompositeOperation='source-over';
+  g.fillStyle=rgba(CORE,1);g.beginPath();g.arc(px,py,s,0,7);g.fill();g.fillStyle='#fff';g.beginPath();g.arc(px,py,s*.45,0,7);g.fill();
+}
+function make(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);return c.toDataURL('image/png');}
+window.art={
+  icon:(n)=>make(n,n,(g,w)=>{bg(g,w,w);grid(g,w,w,w/9,.07);motif(g,w*.5,w*.5,w*.115);}),
+  iconRound:(n)=>make(n,n,(g,w)=>{g.save();g.beginPath();g.arc(w/2,w/2,w/2,0,7);g.clip();bg(g,w,w);grid(g,w,w,w/9,.07);motif(g,w*.5,w*.5,w*.115);g.restore();}),
+  iconRounded:(n)=>make(n,n,(g,w)=>{const r=w*.18;g.save();g.beginPath();g.roundRect(0,0,w,w,r);g.clip();bg(g,w,w);grid(g,w,w,w/9,.07);motif(g,w*.5,w*.5,w*.115);g.restore();}),
+  fg:(n)=>make(n,n,(g,w)=>{motif(g,w*.5,w*.5,w*.075);}),     // adaptive foreground: keep inside the 66% safe zone
+  splash:(w,h)=>make(w,h,(g)=>{bg(g,w,h);const m=Math.min(w,h);motif(g,w*.5,h*.46,m*.05);
+    g.textAlign='center';g.textBaseline='middle';g.font=`900 ${Math.round(m*.1)}px Tektur`;g.fillStyle='#f2efff';g.fillText('ECHO LOOP',w/2,h*.46+m*.3);}),
+  feature:()=>make(1024,500,(g,w,h)=>{
+    const lg=g.createLinearGradient(0,0,0,h); lg.addColorStop(0,'#160a3a'); lg.addColorStop(1,'#05030d'); g.fillStyle=lg; g.fillRect(0,0,w,h);
+    g.globalCompositeOperation='lighter';
+    [[200,120,ECHO,.22,380],[820,90,CORE,.18,360],[560,330,[139,107,255],.2,420]].forEach(([x,y,c,a,r])=>glow(g,x,y,r,c,a));
+    for(let i=0;i<180;i++){const x=(i*97)%w,y=((i*61)%h)*0.62;g.fillStyle=`rgba(255,255,255,${0.15+(i%7)/10})`;g.fillRect(x,y,i%11===0?2:1,i%11===0?2:1);}
+    const hz=318; g.save(); g.beginPath(); g.rect(0,hz,w,h-hz); g.clip();
+    for(let i=-14;i<=14;i++){g.strokeStyle=rgba(CORE,.32*(1-Math.abs(i)/17));g.lineWidth=1.3;g.beginPath();g.moveTo(w/2+i*14,hz);g.lineTo(w/2+i*120,h);g.stroke();}
+    for(let k=0;k<16;k++){const d=k*0.34,y=hz+(h-hz)/(1+d);g.strokeStyle=rgba(ECHO,.55*Math.max(0,1-d/5));g.lineWidth=1.8/(1+d*.4);g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+    g.restore();
+    const hg=g.createLinearGradient(0,hz-40,0,hz+20);hg.addColorStop(0,'rgba(0,0,0,0)');hg.addColorStop(.65,rgba(ECHO,.45));hg.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=hg;g.fillRect(0,hz-40,w,60);
+    g.fillStyle='rgba(255,180,240,.8)';g.fillRect(0,hz-1,w,1.5);
+    g.globalCompositeOperation='source-over';
+    // logo
+    g.textAlign='left';g.textBaseline='alphabetic';g.font='900 118px Tektur';
+    for(let i=6;i>=1;i--){g.fillStyle=`rgb(${90+i*20},${70+i*18},${200+i*8})`;g.fillText('ECHO',64,190+i);}
+    g.fillStyle='#fff';g.fillText('ECHO',64,190);
+    g.lineWidth=3.5;g.strokeStyle=rgba(ECHO,.35);g.strokeText('LOOP',52,322);g.strokeStyle=rgba(ECHO,.7);g.strokeText('LOOP',58,316);
+    g.globalCompositeOperation='lighter';g.strokeStyle=rgba(CORE,.35);g.lineWidth=9;g.strokeText('LOOP',64,310);g.globalCompositeOperation='source-over';
+    g.strokeStyle=rgba(CORE,1);g.lineWidth=3.5;g.strokeText('LOOP',64,310);
+    g.font='600 30px "Chakra Petch"';g.fillStyle='#cdf7ff';g.fillText('Outrun your past self.',70,372);
+    // orbit + motif on a pedestal
+    g.save();g.translate(790,230);g.rotate(-.28);g.globalCompositeOperation='lighter';
+    const og=g.createLinearGradient(-190,0,190,0);og.addColorStop(0,rgba(ECHO,.9));og.addColorStop(1,rgba(CORE,.9));g.strokeStyle=og;g.lineWidth=2;g.beginPath();g.ellipse(0,0,190,78,0,0,7);g.stroke();g.restore();
+    g.globalCompositeOperation='lighter';g.save();g.translate(790,322);g.scale(1,.28);glow(g,0,0,170,CORE,.55);g.restore();
+    [[110,.3],[78,.55],[48,.9]].forEach(([rx,a])=>{g.strokeStyle=rgba(CORE,a);g.lineWidth=1.8;g.beginPath();g.ellipse(790,322,rx,rx*.26,0,0,7);g.stroke();});
+    g.globalCompositeOperation='source-over';
+    motif(g,790,236,30);
+  }),
+};
+</script>
+<script>
+// feature graphic built on a real 1024x500 gameplay frame: logo and tagline over a darkened left side
+window.featureFrom = src => new Promise(res => {
+  const img = new Image();
+  img.onload = () => {
+    const w = 1024, h = 500, c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+    g.drawImage(img, 0, 0, w, h);
+    const sh = g.createLinearGradient(0, 0, 560, 0); sh.addColorStop(0, 'rgba(5,3,13,.86)'); sh.addColorStop(.7, 'rgba(5,3,13,.55)'); sh.addColorStop(1, 'rgba(5,3,13,0)');
+    g.fillStyle = sh; g.fillRect(0, 0, 560, h);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.font = '900 112px Tektur';
+    for (let i = 6; i >= 1; i--) { g.fillStyle = `rgb(${90 + i * 20},${70 + i * 18},${200 + i * 8})`; g.fillText('ECHO', 56, 196 + i); }
+    g.fillStyle = '#fff'; g.fillText('ECHO', 56, 196);
+    g.lineWidth = 3.5; g.strokeStyle = rgba(ECHO, .35); g.strokeText('LOOP', 44, 322); g.strokeStyle = rgba(ECHO, .7); g.strokeText('LOOP', 50, 316);
+    g.globalCompositeOperation = 'lighter'; g.strokeStyle = rgba(CORE, .35); g.lineWidth = 9; g.strokeText('LOOP', 56, 310); g.globalCompositeOperation = 'source-over';
+    g.strokeStyle = rgba(CORE, 1); g.lineWidth = 3.5; g.strokeText('LOOP', 56, 310);
+    g.font = '600 30px "Chakra Petch"'; g.fillStyle = '#cdf7ff'; g.fillText('Race the neon highway.', 62, 372);
+    g.fillStyle = rgba(ECHO, 1); g.fillText('Outrun your echo.', 62, 410);
+    res(c.toDataURL('image/png'));
+  };
+  img.src = src;
+});
+window.frameShot = (src, caption) => new Promise(res => {
+  const img = new Image();
+  img.onload = () => {
+    const w = 1080, h = 1920, c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+    bg(g, w, h); grid(g, w, h, 60, .05);
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#f2efff'; g.font = '900 78px Tektur';
+    const words = caption.split(' '), lines = []; let cur = '';
+    for (const wd of words) { const t = cur ? cur + ' ' + wd : wd; if (g.measureText(t).width > 940 && cur) { lines.push(cur); cur = wd; } else cur = t; }
+    lines.push(cur);
+    const top = lines.length === 1 ? 210 : 160;
+    lines.forEach((l, i) => g.fillText(l, w / 2, top + i * 92));
+    const sw = 864, sh = 1536, sx = (w - sw) / 2, sy = 330, r = 44;
+    [[24, .14], [12, .3]].forEach(([o, a]) => { g.fillStyle = rgba(ECHO, a); g.beginPath(); g.roundRect(sx + o, sy + o, sw, sh, r); g.fill(); });
+    g.save(); g.beginPath(); g.roundRect(sx, sy, sw, sh, r); g.clip(); g.drawImage(img, sx, sy, sw, sh); g.restore();
+    g.strokeStyle = 'rgba(170,160,255,.3)'; g.lineWidth = 3; g.beginPath(); g.roundRect(sx, sy, sw, sh, r); g.stroke();
+    res(c.toDataURL('image/png'));
+  };
+  img.src = src;
+});
+</script>
