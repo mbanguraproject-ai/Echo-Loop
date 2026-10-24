@@ -1,0 +1,13 @@
+{
+  // GitHub Codespaces / Dev Containers: Node 22 + JDK 21, and the Android SDK installed on first start.
+  // After the codespace opens, run: npm run apk   (the APK lands at EchoLoop-debug.apk)
+  "name": "Echo Loop (Android build)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": { "version": "21" }
+  },
+  "postCreateCommand": "bash scripts/setup-android-sdk.sh",
+  "forwardPorts": [8080],
+  "portsAttributes": { "8080": { "label": "Game preview (npm run serve)" } },
+  "hostRequirements": { "cpus": 2, "memory": "8gb" }
+}
