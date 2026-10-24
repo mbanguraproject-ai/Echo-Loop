@@ -27,17 +27,22 @@ need node "Install Node.js 22 or newer."
 need curl "Install curl."
 need unzip "Install unzip."
 
-# Capacitor 8 compiles for Java 21. If the machine's Java is older (or missing), install
-# Eclipse Temurin 21 into ~/jdk-21 and point Gradle at it, leaving the system Java alone.
+# The build needs Java 21-24: Capacitor 8 compiles for Java 21, and Gradle 8.14 can't compile
+# its build scripts on Java 25+ ("Unsupported class file major version 69"). If the machine's
+# Java is outside that range (or missing), point Gradle at a JDK 21: one already on the machine,
+# or Eclipse Temurin 21 downloaded into ~/jdk-21. The system Java is left alone.
 java_major() { "$1" -version 2>&1 | awk -F'"' '/version/ { split($2, v, "."); print (v[1] == "1" ? v[2] : v[1]); exit }'; }
 JAVA_BIN="$(command -v java || true)"
 if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA_BIN="$JAVA_HOME/bin/java"; fi
 major=0
 if [ -n "$JAVA_BIN" ]; then major="$(java_major "$JAVA_BIN")"; fi
-if [ "${major:-0}" -lt 21 ] 2>/dev/null; then
+if [ "${major:-0}" -lt 21 ] || [ "${major:-0}" -gt 24 ]; then
   JDK21="$HOME/jdk-21"
-  if [ ! -x "$JDK21/bin/java" ]; then
-    echo "Java ${major:-none} found; the build needs JDK 21. Installing Eclipse Temurin 21 into $JDK21"
+  for d in /usr/lib/jvm/*21* /usr/local/sdkman/candidates/java/21* "$HOME"/.sdkman/candidates/java/21*; do
+    if [ ! -x "$JDK21/bin/javac" ] && [ -x "$d/bin/javac" ] && [ "$(java_major "$d/bin/java")" = 21 ]; then JDK21="$d"; fi
+  done
+  if [ ! -x "$JDK21/bin/javac" ]; then
+    echo "Java ${major:-none} found; the build needs Java 21-24. Installing Eclipse Temurin 21 into $JDK21"
     case "$(uname -m)" in aarch64|arm64) arch=aarch64 ;; *) arch=x64 ;; esac
     tmp="$(mktemp -d)"
     curl -fsSL "https://api.adoptium.net/v3/binary/latest/21/ga/linux/$arch/jdk/hotspot/normal/eclipse" -o "$tmp/jdk.tar.gz"
@@ -45,11 +50,12 @@ if [ "${major:-0}" -lt 21 ] 2>/dev/null; then
     tar -xzf "$tmp/jdk.tar.gz" -C "$JDK21" --strip-components=1
     rm -rf "$tmp"
   fi
-  props="$HOME/.gradle/gradle.properties"
-  mkdir -p "$HOME/.gradle"; touch "$props"
+  gradle_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+  props="$gradle_home/gradle.properties"
+  mkdir -p "$gradle_home"; touch "$props"
   grep -v '^org.gradle.java.home=' "$props" > "$props.tmp" || true
   echo "org.gradle.java.home=$JDK21" >> "$props.tmp"; mv "$props.tmp" "$props"
-  echo "Gradle will build with $JDK21 (set in $props)"
+  echo "Java ${major:-none} can't run this build; Gradle will use JDK 21 at $JDK21 (set in $props)"
   export JAVA_HOME="$JDK21"
   if [ -z "$(command -v java || true)" ]; then
     echo "No java on PATH: run 'export JAVA_HOME=$JDK21 PATH=$JDK21/bin:\$PATH' before building." >&2
